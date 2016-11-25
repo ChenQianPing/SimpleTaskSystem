@@ -43,5 +43,21 @@ namespace SimpleTaskSystem.Tasks
     }
 }
 ```
+Person实体更简单，只定义了一个Name属性：
+```
+using Abp.Domain.Entities;
+using System.ComponentModel.DataAnnotations.Schema;
 
+namespace SimpleTaskSystem.People
+{
+    [Table("StsPeople")]
+    public class Person : Entity
+    {
+        public virtual string Name { get; set; }
+    }
+}
+```
+在ABP框架中，有一个Entity基类，它有一个Id属性。因为Task类继承自Entity<long>，所以它有一个long类型的Id。Person类有一个int类型的Id，因为int类型是Entity基类Id的默认类型，没有特别指定类型时，实体的Id就是int类型。
 
+# 创建DbContext
+使用EntityFramework需要先定义DbContext类，ABP的模板已经创建了DbContext文件，我们只需要把Task和Person类添加到IDbSet，请看代码：
