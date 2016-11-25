@@ -61,3 +61,22 @@ namespace SimpleTaskSystem.People
 
 # 创建DbContext
 使用EntityFramework需要先定义DbContext类，ABP的模板已经创建了DbContext文件，我们只需要把Task和Person类添加到IDbSet，请看代码：
+```
+public class SimpleTaskSystemDbContext : AbpDbContext
+{
+	public virtual IDbSet<Task> Tasks { get; set; }
+	public virtual IDbSet<Person> People { get; set; }
+
+	public SimpleTaskSystemDbContext()
+		: base("Default")
+	{
+
+	}
+
+	public SimpleTaskSystemDbContext(string nameOrConnectionString)
+		: base(nameOrConnectionString)
+	{
+
+	}
+}
+```
