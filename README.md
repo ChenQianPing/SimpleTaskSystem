@@ -102,3 +102,127 @@ public interface ITaskRepository : IRepository<Task, long>
 在IRepository中已经定义了常用的增删改查方法：
 所以ITaskRepository默认就有了上面那些方法。可以再加上它独有的方法GetAllWithPeople(...)。
 不需要为Person类创建一个仓储类，因为默认的方法已经够用了。ABP提供了一种注入通用仓储的方式，将在后面“创建应用服务”一节的TaskAppService类中看到。
+
+# 实现仓储类
+我们将在EntityFramework项目中实现上面定义的ITaskRepository仓储接口。
+通过模板建立的项目已经定义了一个**仓储基类：SimpleTaskSystemRepositoryBase（这是一种比较好的实践，因为以后可以在这个基类中添加通用的方法）**。
+```
+public class TaskRepository : SimpleTaskSystemRepositoryBase<Tasks.Task, long>, ITaskRepository
+{
+	public TaskRepository(IDbContextProvider<SimpleTaskSystemDbContext> dbContextProvider)
+		: base(dbContextProvider)
+	{
+	}
+
+	public List<Tasks.Task> GetAllWithPeople(int? assignedPersonId, TaskState? state)
+	{
+		// 在仓储方法中，不用处理数据库连接、DbContext和数据事务，ABP框架会自动处理。
+		var query = GetAll(); //GetAll() 返回一个 IQueryable<T>接口类型
+		// 添加一些Where条件
+
+		// AssignedPersonId
+		if (assignedPersonId.HasValue)
+		{
+			query = query.Where(task => task.AssignedPerson.Id == assignedPersonId.Value);
+		}
+
+		// State
+		if (state.HasValue)
+		{
+			query = query.Where(task => task.State == state);
+		}
+
+		return query
+			.OrderByDescending(task => task.CreationTime)
+			.Include(task => task.AssignedPerson)
+			.ToList();
+	}
+}
+```
+TaskRepository继承自SimpleTaskSystemRepositoryBase并且实现了上面定义的ITaskRepository接口。
+
+# 创建应用服务（Application Services）
+在Application项目中定义应用服务。首先定义Task的应用服务层的接口：
+```
+public interface ITaskAppService : IApplicationService
+{
+	GetTasksOutput GetTasks(GetTasksInput input);
+
+	void UpdateTask(UpdateTaskInput input);
+
+	void CreateTask(CreateTaskInput input);
+}
+```
+ITaskAppService继承自IApplicationService，ABP自动为这个类提供一些功能特性（比如依赖注入和参数有效性验证）。
+然后，我们写TaskAppService类来实现ITaskAppService接口：
+```
+public class TaskAppService : ApplicationService, ITaskAppService
+{
+	private readonly ITaskRepository _taskRepository;
+	private readonly IRepository<Person> _personRepository;
+
+	/// <summary>
+	/// 构造函数自动注入我们所需要的类或接口
+	/// </summary>
+	/// <param name="taskRepository"></param>
+	/// <param name="personRepository"></param>
+	public TaskAppService(ITaskRepository taskRepository, IRepository<Person> personRepository)
+	{
+		_taskRepository = taskRepository;
+		_personRepository = personRepository;
+	}
+
+	public void CreateTask(CreateTaskInput input)
+	{
+		Logger.Info("Creating a task for input: " + input);
+
+		// 通过输入参数，创建一个新的Task实体
+		var task = new Task { Description = input.Description };
+
+		if (input.AssignedPersonId.HasValue)
+		{
+			task.AssignedPersonId = input.AssignedPersonId.Value;
+		}
+
+		// 调用仓储基类的Insert方法把实体保存到数据库中
+		_taskRepository.Insert(task);
+	}
+
+	public GetTasksOutput GetTasks(GetTasksInput input)
+	{
+		// 调用Task仓储的特定方法GetAllWithPeople
+		var tasks = _taskRepository.GetAllWithPeople(input.AssignedPersonId, input.State);
+
+		// 用AutoMapper自动将List<Task>转换成List<TaskDto>
+		return new GetTasksOutput
+		{
+			Tasks = Mapper.Map<List<TaskDto>>(tasks)
+		};
+	}
+
+	public void UpdateTask(UpdateTaskInput input)
+	{
+		// 可以直接Logger,它在ApplicationService基类中定义的
+		Logger.Info("Updating a task for input: " + input);
+
+		// 通过仓储基类的通用方法Get，获取指定Id的Task实体对象
+		var task = _taskRepository.Get(input.TaskId);
+
+		// 修改task实体的属性值
+		if (input.State.HasValue)
+		{
+			task.State = input.State.Value;
+		}
+
+		if (input.AssignedPersonId.HasValue)
+		{
+			task.AssignedPerson = _personRepository.Load(input.AssignedPersonId.Value);
+		}
+
+		// 我们都不需要调用Update方法
+		// 因为应用服务层的方法默认开启了工作单元模式（Unit of Work）
+		// ABP框架会工作单元完成时自动保存对实体的所有更改，除非有异常抛出。有异常时会自动回滚，因为工作单元默认开启数据库事务。
+	}
+}
+```
+TaskAppService使用仓储进行数据库操作，它通往构造函数注入仓储对象的引用。
