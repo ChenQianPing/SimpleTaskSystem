@@ -87,3 +87,18 @@ public class SimpleTaskSystemDbContext : AbpDbContext
 - 在VS2015底部的“程序包管理器控制台”窗口中，选择默认项目并执行命令“Add-Migration InitialCreate”,程序包管理器控制台：程序包源（K）：nuget.org，默认项目（J）：SimpleTaskSystem.EntityFramework
 -  然后继续在“程序包管理器控制台”执行“Update-Database”，会自动在数据库创建相应的数据表.
 - 以后修改了实体，可以再次执行Add-Migration InitialCreate和Update-Database，就能很轻松的让数据库结构与实体类的同步）
+
+# 定义仓储接口
+通过仓储模式，**可以更好把业务代码与数据库操作代码更好的分离，可以针对不同的数据库有不同的实现类**，而业务代码不需要修改。
+定义仓储接口的代码写到Core项目中，因为仓储接口是领域层的一部分。
+我们先定义Task的仓储接口：
+```
+public interface ITaskRepository : IRepository<Task, long>
+{
+	List<Task> GetAllWithPeople(int? assignedPersonId, TaskState? state);
+}
+```
+它继承自ABP框架中的IRepository泛型接口。
+在IRepository中已经定义了常用的增删改查方法：
+所以ITaskRepository默认就有了上面那些方法。可以再加上它独有的方法GetAllWithPeople(...)。
+不需要为Person类创建一个仓储类，因为默认的方法已经够用了。ABP提供了一种注入通用仓储的方式，将在后面“创建应用服务”一节的TaskAppService类中看到。
